@@ -10,6 +10,11 @@ export interface Product {
   category?: string;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+}
+
 export enum ViewState {
   INVENTORY = 'INVENTORY',
   ADD_PRODUCT = 'ADD_PRODUCT',

@@ -1,10 +1,14 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 const getAiClient = () => {
+  // API Key must be obtained exclusively from process.env.API_KEY as per guidelines.
+  // We assume this variable is pre-configured and accessible.
   const apiKey = process.env.API_KEY;
+
   if (!apiKey) {
-    throw new Error("API Key is missing");
+     throw new Error("API Key is missing. Please configure process.env.API_KEY");
   }
+
   return new GoogleGenAI({ apiKey });
 };
 
@@ -19,7 +23,7 @@ export const sendMessageToGemini = async (
 
     const chat = ai.chats.create({
       model: model,
-      history: history, // Note: @google/genai history format might differ slightly, usually strictly content objects.
+      history: history, 
       config: {
         systemInstruction: "Sen ASLAN AVM'nin yardımsever, Türkçe konuşan yapay zeka asistanısın. Mağaza yönetimi, stok takibi ve genel muhasebe konularında uzmansın. Cevapların kısa, net ve profesyonel olmalı.",
       },
