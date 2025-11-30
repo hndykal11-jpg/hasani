@@ -22,3 +22,12 @@ export interface ChatMessage {
   text: string;
   timestamp: Date;
 }
+
+export interface StockLog {
+  id: string;
+  product_id: string;
+  old_quantity: number;
+  new_quantity: number;
+  change_type: 'INITIAL' | 'UPDATE' | 'SALE';
+  created_at: string;
+}

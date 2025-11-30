@@ -1,10 +1,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Product } from '../types';
-import { Search, PackageOpen, Filter, LayoutGrid, List, X, Tag, Building2, Barcode as BarcodeIcon, DollarSign, Calendar, TrendingUp, Save, Check } from 'lucide-react';
+import { Product, StockLog } from '../types';
+import { supabase } from '../services/supabaseClient';
+import { Search, PackageOpen, Filter, LayoutGrid, List, X, Tag, Building2, Barcode as BarcodeIcon, DollarSign, Calendar, TrendingUp, Save, Check, Clock, ArrowUp, ArrowDown, History, Loader2, PlusCircle } from 'lucide-react';
 
 interface InventoryListProps {
   products: Product[];
   onUpdateQuantity: (id: string, newQuantity: number) => void;
+  onAddSampleProducts: () => void;
 }
 
 // Helper component for inline quantity editing
@@ -72,10 +74,31 @@ const QuantityEditor = ({
 };
 
 const ProductDetailModal = ({ product, onClose }: { product: Product; onClose: () => void }) => {
+  const [logs, setLogs] = useState<StockLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      setLoadingLogs(true);
+      const { data, error } = await supabase
+        .from('product_history')
+        .select('*')
+        .eq('product_id', product.id)
+        .order('created_at', { ascending: false });
+      
+      if (data) {
+        setLogs(data as StockLog[]);
+      }
+      setLoadingLogs(false);
+    };
+
+    fetchHistory();
+  }, [product.id]);
+
   if (!product) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-fade-in" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex justify-between items-start p-6 border-b border-gray-100 bg-gray-50/50">
@@ -203,26 +226,69 @@ const ProductDetailModal = ({ product, onClose }: { product: Product; onClose: (
                 </div>
               </div>
 
-              {/* Description / Extra Data Placeholder */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                <h3 className="font-semibold text-gray-900 mb-2">Ürün Stok Geçmişi</h3>
-                <div className="space-y-3">
-                   {/* Mock History Items */}
-                   <div className="flex items-start gap-3 text-sm text-gray-600">
-                      <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5"></div>
-                      <div>
-                        <p className="font-medium text-gray-900">Stok Güncelleme</p>
-                        <p className="text-xs text-gray-500">Bugün, 14:30 • {product.quantity} adet mevcut</p>
-                      </div>
-                   </div>
-                   <div className="flex items-start gap-3 text-sm text-gray-600">
-                      <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5"></div>
-                      <div>
-                        <p className="font-medium text-gray-900">Ürün Oluşturuldu</p>
-                        <p className="text-xs text-gray-500">Sistem yöneticisi tarafından eklendi.</p>
-                      </div>
-                   </div>
-                </div>
+              {/* Stock History Log */}
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <History size={18} className="text-orange-600" />
+                  Ürün Stok Geçmişi
+                </h3>
+                
+                {loadingLogs ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="animate-spin text-orange-500" />
+                  </div>
+                ) : logs.length > 0 ? (
+                  <div className="space-y-0 relative">
+                    {/* Vertical Line */}
+                    <div className="absolute left-[19px] top-2 bottom-4 w-px bg-gray-200"></div>
+                    
+                    {logs.map((log) => {
+                      const isIncrease = log.new_quantity > log.old_quantity;
+                      const isInitial = log.change_type === 'INITIAL';
+                      const diff = log.new_quantity - log.old_quantity;
+                      
+                      return (
+                        <div key={log.id} className="relative flex items-start gap-4 pb-6 last:pb-0 group">
+                          <div className={`relative z-10 w-10 h-10 rounded-full border-2 flex items-center justify-center bg-white flex-shrink-0 ${
+                            isInitial 
+                              ? 'border-blue-200 text-blue-600' 
+                              : isIncrease 
+                                ? 'border-green-200 text-green-600' 
+                                : 'border-red-200 text-red-600'
+                          }`}>
+                            {isInitial ? <PackageOpen size={18} /> : isIncrease ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
+                          </div>
+                          
+                          <div className="flex-1 pt-1">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium text-gray-900">
+                                  {isInitial ? 'Ürün Kaydı Oluşturuldu' : isIncrease ? 'Stok Girişi' : 'Stok Çıkışı'}
+                                </p>
+                                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                  <Clock size={12} />
+                                  {new Date(log.created_at).toLocaleDateString('tr-TR')} • {new Date(log.created_at).toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'})}
+                                </p>
+                              </div>
+                              <div className={`text-sm font-bold ${isInitial ? 'text-blue-600' : isIncrease ? 'text-green-600' : 'text-red-600'}`}>
+                                {isInitial ? log.new_quantity : (diff > 0 ? `+${diff}` : diff)} Adet
+                              </div>
+                            </div>
+                            <div className="mt-2 text-sm bg-white p-2 rounded border border-gray-100 inline-block">
+                              <span className="text-gray-500">Önceki:</span> <span className="font-mono font-medium">{log.old_quantity}</span>
+                              <span className="mx-2 text-gray-300">→</span>
+                              <span className="text-gray-900">Yeni:</span> <span className="font-mono font-bold">{log.new_quantity}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    Henüz kayıtlı bir stok geçmişi bulunmamaktadır.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -242,7 +308,7 @@ const ProductDetailModal = ({ product, onClose }: { product: Product; onClose: (
   );
 };
 
-const InventoryList: React.FC<InventoryListProps> = ({ products, onUpdateQuantity }) => {
+const InventoryList: React.FC<InventoryListProps> = ({ products, onUpdateQuantity, onAddSampleProducts }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
@@ -361,7 +427,25 @@ const InventoryList: React.FC<InventoryListProps> = ({ products, onUpdateQuantit
       </div>
 
       {/* Content Area */}
-      {filteredProducts.length > 0 ? (
+      {products.length === 0 && !searchTerm && !selectedCategory ? (
+        // Completely Empty State with Add Sample Button
+        <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white rounded-xl shadow-sm border border-gray-200 border-dashed">
+          <div className="bg-orange-50 p-4 rounded-full mb-4">
+            <PackageOpen className="h-12 w-12 text-orange-400" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Envanteriniz Boş</h3>
+          <p className="text-gray-500 max-w-md mb-8">
+            Henüz sisteme hiç ürün eklenmemiş. Başlamak için manuel olarak ürün ekleyebilir veya test etmek için örnek verileri yükleyebilirsiniz.
+          </p>
+          <button 
+            onClick={onAddSampleProducts}
+            className="flex items-center gap-2 px-6 py-3 bg-white text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 hover:border-orange-300 transition-all font-medium shadow-sm group"
+          >
+            <PlusCircle size={20} className="group-hover:scale-110 transition-transform" />
+            Örnek 5 Ürün Ekle
+          </button>
+        </div>
+      ) : filteredProducts.length > 0 ? (
         viewMode === 'table' ? (
           /* Table View */
           <div className="bg-white shadow overflow-hidden sm:rounded-lg border border-gray-200">
@@ -456,7 +540,7 @@ const InventoryList: React.FC<InventoryListProps> = ({ products, onUpdateQuantit
                   </div>
                   {product.category && (
                     <div className="absolute bottom-2 left-2">
-                      <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
+                      <span className="bg-white/90 text-orange-600 border border-orange-100 shadow-sm text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
                         {product.category}
                       </span>
                     </div>
